@@ -1,0 +1,69 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    environment:
+      APP_NAME: "${APP_NAME:-TodoApp}"
+      APP_ENV: "${APP_ENV:-production}"
+      APP_KEY: "${APP_KEY}"
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      APP_URL: "${APP_URL:-http://localhost}"
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: "${DB_DATABASE:-todo_app}"
+      DB_USERNAME: "${DB_USERNAME:-todo_user}"
+      DB_PASSWORD: "${DB_PASSWORD:-secret123}"
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+    volumes:
+      - app_storage:/var/www/html/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - todo_network
+
+  webserver:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - app_storage:/var/www/html/storage:ro
+    depends_on:
+      - app
+    networks:
+      - todo_network
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: "${DB_DATABASE:-todo_app}"
+      MYSQL_USER: "${DB_USERNAME:-todo_user}"
+      MYSQL_PASSWORD: "${DB_PASSWORD:-secret123}"
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD:-root_secret123}"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - todo_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root_secret123}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  todo_network:
+    driver: bridge
+
+volumes:
+  db_data:
+    driver: local
+  app_storage:
+    driver: local
